@@ -14,7 +14,10 @@ public class PlayerController : NetworkBehaviour
 
     public float groundDistance = 0.3f;
 
+    [SerializeField] private AudioSource jumpAudio;
+
     [SerializeField] private Transform raycast;
+    private bool jumpRequested;
 
     private void Awake()
     {
@@ -45,7 +48,7 @@ public class PlayerController : NetworkBehaviour
         float h = 0f;
         float v = 0f;
 
-        if(Keyboard.current != null)
+        if (Keyboard.current != null)
         {
             if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) h -= 1f;
             if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) h += 1f;
@@ -58,17 +61,19 @@ public class PlayerController : NetworkBehaviour
         //Enviamos la entrada de control al servidor por un ServerRpc
         SubmitInputServerRpc(input);
 
-        if(Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) {
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
             JumpServerRpc();
         }
 
 
     }
     /// <summary>
-    /// ServerRpc: Metodo ejecutado Exclusivamente en el servidor tras ser invocado por el CLiente
+    /// ServerRpc es un mensaje que va del cliente al servidor (mandar algo al servidor)
+    /// ClientRpc es un mensaje que va del servidor al cliente(mandar algo a los clientes)
     /// </summary>
-    
-    
+
+
 
     [ServerRpc]
     private void SubmitInputServerRpc(Vector2 input)
@@ -77,38 +82,56 @@ public class PlayerController : NetworkBehaviour
         inputVector = input;
     }
 
-    [ServerRpc]
+    [ServerRpc] //Cliente: Servidor quiero saltar -> Servidor: vale comprobamos si puedes
     private void JumpServerRpc()
     {
-        RaycastHit hit;
+        jumpRequested = true;
+    }
 
-        if(Physics.Raycast(raycast.position, Vector3.down, out hit, groundDistance))
+    [ClientRpc] //Servidor: Clientes reproducimos salto -> Clientes: boing
+    private void PlayJumpSoundClientRpc()
+    {
+        jumpAudio.Play();
+    }
+
+    private void FixedUpdate()
+    {
+        if (!IsServer) return;
+
+        // Movimiento
+        Vector3 moveDirection = new Vector3(inputVector.x, 0f, inputVector.y);
+
+        if (moveDirection != Vector3.zero)
         {
-            if (hit.collider.CompareTag("Floor")) //detectamos si el raycast esta tocando el suelo
+            transform.LookAt(transform.position - moveDirection);
+        }
+
+        Vector3 targetVelocity = moveDirection * speed;
+
+        rb.linearVelocity = new Vector3(
+            targetVelocity.x,
+            rb.linearVelocity.y,
+            targetVelocity.z
+        );
+
+        // Salto
+        if (jumpRequested)
+        {
+            jumpRequested = false;
+
+            if (Physics.Raycast(raycast.position, Vector3.down, out RaycastHit hit, groundDistance))
             {
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse); //añadimos una fuerza
+                if (hit.collider.CompareTag("Floor"))
+                {
+                    rb.AddForce(
+                        Vector3.up * jumpForce, ForceMode.Impulse
+                    );
+
+                    PlayJumpSoundClientRpc();
+                }
             }
         }
     }
 
 
-    private void FixedUpdate()
-    {
-        if (!IsServer) return; //"Los cambios reales de física los decide y aplica únicamente el servidor;
-                               //los clientes no deben hacerlo por su cuenta."
-
-        //Aplicar la velocidad en el server usando Rb
-        Vector3 moveDirection = new Vector3(inputVector.x, 0f, inputVector.y);
-
-        if(moveDirection != Vector3.zero)
-        {
-            transform.LookAt(transform.position - moveDirection); //Usamos lookAt para que los personajes coloquen su orientacion segun hacia donde se esten moviendo
-        }
-
-        //Conservamos la velocidad vertical que haya y modificamos x/z
-        Vector3 targetVelocity = moveDirection * speed;
-        rb.linearVelocity = new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z);
-    }
-
-    
 }
