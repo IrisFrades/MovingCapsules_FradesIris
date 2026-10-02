@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -68,6 +69,8 @@ public class PlayerController : NetworkBehaviour
 
 
     }
+
+    //private readonly NetworkVariable<Color> playerColour = new NetworkVariable<Color>()
     /// <summary>
     /// ServerRpc es un mensaje que va del cliente al servidor (mandar algo al servidor)
     /// ClientRpc es un mensaje que va del servidor al cliente(mandar algo a los clientes)
