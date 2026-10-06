@@ -306,7 +306,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   jumpForce: 5
   speed: 5
-  groundDistance: 1
+  groundDistance: 0.3
   jumpAudio: {fileID: 4606897126275880815}
   raycast: {fileID: 170131143686897992}
 --- !u!114 &4412687179711821684
