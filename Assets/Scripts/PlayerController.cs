@@ -33,6 +33,12 @@ public class PlayerController : NetworkBehaviour
 
     private Renderer playerRenderer;
 
+
+    [SerializeField] private GameObject projectilePrefab;
+    [SerializeField] private float projectileSpawnDistance = 1.2f;
+    [SerializeField] private Transform projectileSpawnPoint;
+
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -100,6 +106,14 @@ public class PlayerController : NetworkBehaviour
             if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) v += 1f;
         }
 
+
+        if (Keyboard.current != null &&
+            Keyboard.current.fKey.wasPressedThisFrame)
+        {
+            ShootProjectileServerRpc();
+        }
+
+
         Vector2 input = new Vector2(h, v).normalized;
 
         //Enviamos la entrada de control al servidor por un ServerRpc
@@ -117,7 +131,20 @@ public class PlayerController : NetworkBehaviour
 
     }
 
-    
+    public void ChangeColorFromProjectile()
+    {
+        if (!IsServer)
+            return;
+
+        playerColour.Value = Random.ColorHSV(
+            0f, 1f,
+            0.7f, 1f,
+            0.7f, 1f
+        );
+    }
+
+
+
     /// <summary>
     /// ServerRpc es un mensaje que va del cliente al servidor (mandar algo al servidor)
     /// ClientRpc es un mensaje que va del servidor al cliente(mandar algo a los clientes)
@@ -143,6 +170,46 @@ public class PlayerController : NetworkBehaviour
     {
         jumpAudio.Play();
     }
+
+
+    [ServerRpc]
+    private void ShootProjectileServerRpc()
+    {
+        if (projectilePrefab == null || projectileSpawnPoint == null)
+            return;
+
+        Vector3 spawnPosition = projectileSpawnPoint.position;
+        Quaternion spawnRotation = projectileSpawnPoint.rotation;
+
+        GameObject projectileObject = Instantiate(
+            projectilePrefab,
+            spawnPosition,
+            spawnRotation
+        );
+
+        NetworkObject networkObject =
+            projectileObject.GetComponent<NetworkObject>();
+
+        if (networkObject == null)
+        {
+            Destroy(projectileObject);
+            return;
+        }
+
+        Projectile projectile =
+            projectileObject.GetComponent<Projectile>();
+
+        if (projectile != null)
+        {
+            projectile.Initialize(
+                OwnerClientId,
+                projectileSpawnPoint.forward
+            );
+        }
+
+        networkObject.Spawn();
+    }
+
 
     /// <summary>
     /// Netcode se encarga de enviar el nuevo valor a los demas clientes
