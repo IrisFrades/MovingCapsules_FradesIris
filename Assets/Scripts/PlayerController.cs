@@ -35,7 +35,6 @@ public class PlayerController : NetworkBehaviour
 
 
     [SerializeField] private GameObject projectilePrefab;
-    [SerializeField] private float projectileSpawnDistance = 1.2f;
     [SerializeField] private Transform projectileSpawnPoint;
 
 
@@ -175,20 +174,18 @@ public class PlayerController : NetworkBehaviour
     [ServerRpc]
     private void ShootProjectileServerRpc()
     {
-        if (projectilePrefab == null || projectileSpawnPoint == null)
+        if (projectilePrefab == null || projectileSpawnPoint == null) //Comprobamos si existen el prefab y el spawn point
             return;
 
         Vector3 spawnPosition = projectileSpawnPoint.position;
         Quaternion spawnRotation = projectileSpawnPoint.rotation;
 
-        GameObject projectileObject = Instantiate(
-            projectilePrefab,
-            spawnPosition,
-            spawnRotation
-        );
+        GameObject projectileObject = Instantiate(projectilePrefab, spawnPosition, spawnRotation); //Crea una instancia del prefab del proyectil
 
-        NetworkObject networkObject =
-            projectileObject.GetComponent<NetworkObject>();
+
+        //Aqui busca si el prefab tiene NetworkObject, DEBEN tener ese componente
+
+        NetworkObject networkObject = projectileObject.GetComponent<NetworkObject>();
 
         if (networkObject == null)
         {
@@ -196,18 +193,15 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        Projectile projectile =
-            projectileObject.GetComponent<Projectile>();
+        Projectile projectile = projectileObject.GetComponent<Projectile>();
 
         if (projectile != null)
         {
-            projectile.Initialize(
-                OwnerClientId,
-                projectileSpawnPoint.forward
+            projectile.Initialize(OwnerClientId, projectileSpawnPoint.forward
             );
         }
 
-        networkObject.Spawn();
+        networkObject.Spawn(); //Se registra el proyectil como objeto de red.
     }
 
 
@@ -239,11 +233,7 @@ public class PlayerController : NetworkBehaviour
 
         Vector3 targetVelocity = moveDirection * speed;
 
-        rb.linearVelocity = new Vector3(
-            targetVelocity.x,
-            rb.linearVelocity.y,
-            targetVelocity.z
-        );
+        rb.linearVelocity = new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z);
 
         // Salto
         if (jumpRequested)
@@ -263,6 +253,5 @@ public class PlayerController : NetworkBehaviour
             }
         }
     }
-
 
 }
