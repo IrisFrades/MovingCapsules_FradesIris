@@ -1,10 +1,8 @@
 using UnityEngine;
 using Unity.Netcode;
-using Unity.VisualScripting;
 
 public class Projectile : NetworkBehaviour
 {
-
     [SerializeField] private float speed = 15f;
 
     private Rigidbody rb;
@@ -19,35 +17,40 @@ public class Projectile : NetworkBehaviour
     {
         shooterClientId = shooterId;
 
-        if(rb != null)
+        if (rb != null)
         {
             rb.linearVelocity = direction.normalized * speed;
         }
-
-        
     }
 
     private void OnTriggerEnter(Collider other)
     {
+        // Solo el servidor gestiona los impactos.
         if (!IsServer)
             return;
 
         Debug.Log("El proyectil ha tocado: " + other.name);
 
+        // Comprobar si hemos golpeado a un jugador.
         PlayerController player =
             other.GetComponentInParent<PlayerController>();
 
         // Ignorar al jugador que ha disparado.
-        if (player != null && player.OwnerClientId == shooterClientId)
+        if (player != null &&
+            player.OwnerClientId == shooterClientId)
+        {
             return;
+        }
 
-        // Cambiar el color si ha golpeado a otro jugador.
+        // Cambiar el color del jugador alcanzado.
         if (player != null)
         {
             player.ChangeColorFromProjectile();
+
+            Debug.Log("¡Jugador alcanzado! Cambiando su color.");
         }
 
-        // Destruir el proyectil en la red.
+        // Destruir el proyectil para todos los clientes.
         if (NetworkObject != null && NetworkObject.IsSpawned)
         {
             NetworkObject.Despawn(true);
@@ -57,6 +60,4 @@ public class Projectile : NetworkBehaviour
             Destroy(gameObject);
         }
     }
-
-
 }
