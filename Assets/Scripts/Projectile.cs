@@ -25,32 +25,31 @@ public class Projectile : NetworkBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // Solo el servidor gestiona los impactos.
+        // Solo el servidor gestiona los impactos
         if (!IsServer)
             return;
 
         Debug.Log("El proyectil ha tocado: " + other.name);
 
-        // Comprobar si hemos golpeado a un jugador.
+        // Comprobar si hemos golpeado a un jugador
         PlayerController player =
             other.GetComponentInParent<PlayerController>();
 
-        // Ignorar al jugador que ha disparado.
+        // Ignorar al jugador que ha disparado
         if (player != null &&
             player.OwnerClientId == shooterClientId)
         {
             return;
         }
 
-        // Cambiar el color del jugador alcanzado.
+        // Cambiamos el color del jugador que ha sido disparado
         if (player != null)
         {
             player.ChangeColorFromProjectile();
 
-            Debug.Log("¡Jugador alcanzado! Cambiando su color.");
         }
 
-        // Destruir el proyectil para todos los clientes.
+        // Destruir el proyectil para todos los clientes
         if (NetworkObject != null && NetworkObject.IsSpawned)
         {
             NetworkObject.Despawn(true);

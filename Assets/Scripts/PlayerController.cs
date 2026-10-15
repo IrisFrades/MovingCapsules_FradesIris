@@ -36,6 +36,7 @@ public class PlayerController : NetworkBehaviour
 
     [SerializeField] private GameObject projectilePrefab;
     [SerializeField] private Transform projectileSpawnPoint;
+    private float knockbackTimer = 0f;
 
 
     private void Awake()
@@ -127,6 +128,8 @@ public class PlayerController : NetworkBehaviour
         {
             ChangeColorServerRpc();
         }
+
+
 
     }
 
@@ -223,30 +226,36 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        // Movimiento
-        Vector3 moveDirection = new Vector3(inputVector.x, 0f, inputVector.y);
-
-        if (moveDirection != Vector3.zero)
+        // Para que durante ese tiempo el movimiento normal del jugador no sobrescriba la velocidad que le ha dado el bumper
+        if (knockbackTimer > 0f)
         {
-            transform.LookAt(transform.position - moveDirection);
+            knockbackTimer -= Time.fixedDeltaTime;
+        }
+        else
+        {
+            // Movimiento normal del jugador
+            Vector3 moveDirection = new Vector3( inputVector.x, 0f, inputVector.y );
+
+            if (moveDirection != Vector3.zero)
+            {
+                transform.LookAt(transform.position - moveDirection);
+            }
+
+            Vector3 targetVelocity = moveDirection * speed;
+
+            rb.linearVelocity = new Vector3( targetVelocity.x, rb.linearVelocity.y, targetVelocity.z );
         }
 
-        Vector3 targetVelocity = moveDirection * speed;
-
-        rb.linearVelocity = new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z);
-
-        // Salto
+        // Salto normal
         if (jumpRequested)
         {
             jumpRequested = false;
 
-            if (Physics.Raycast(raycast.position, Vector3.down, out RaycastHit hit, groundDistance))
+            if (Physics.Raycast( raycast.position, Vector3.down, out RaycastHit hit, groundDistance))
             {
                 if (hit.collider.CompareTag("Floor"))
                 {
-                    rb.AddForce(
-                        Vector3.up * jumpForce, ForceMode.Impulse
-                    );
+                    rb.AddForce( Vector3.up * jumpForce, ForceMode.Impulse);
 
                     PlayJumpSoundClientRpc();
                 }
@@ -254,4 +263,16 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    //el que llama el bumper cuando golpea al jugador
+    public void ApplyKnockback(Vector3 impulse)
+    {
+        if (!IsServer) return;
+
+        // Evitamos que el movimiento normal anule el impulso
+        knockbackTimer = 0.3f;
+
+        rb.AddForce(impulse, ForceMode.Impulse);
+    }
+
 }
+

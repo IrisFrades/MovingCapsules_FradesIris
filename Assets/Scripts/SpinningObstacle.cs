@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class SpinningObstacle : NetworkBehaviour
 {
-    [SerializeField] private float rotationSpeed = 60f;
+    [SerializeField] private float rotationSpeed;
 
     private void Update()
     {
@@ -13,8 +13,7 @@ public class SpinningObstacle : NetworkBehaviour
             return;
 
         transform.Rotate(
-            Vector3.up,
-            rotationSpeed * Time.deltaTime
+            Vector3.up, rotationSpeed * Time.deltaTime
         );
     }
 }

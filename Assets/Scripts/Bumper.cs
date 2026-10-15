@@ -3,31 +3,21 @@ using Unity.Netcode;
 
 public class Bumper : NetworkBehaviour
 {
-    [SerializeField] private float pushForce = 8f;
+    [SerializeField] private float pushForce; //Fuerza horizontal
+    [SerializeField] private float upwardForce; //Fuerza que hace que el jugador vaya hacia arriba
 
     private void OnCollisionEnter(Collision collision)
     {
-        Debug.Log("Bumper: colisión con " + collision.gameObject.name);
+        if (!IsServer) return;
 
-        if (!IsServer)
-        {
-            Debug.Log("No soy el servidor");
+        if (!collision.gameObject.TryGetComponent<NetworkObject>( out var networkObject)) //Comprobamos si el objeto tiene networkObject
             return;
-        }
 
-        if (!collision.gameObject.TryGetComponent<NetworkObject>(out var networkObject))
-        {
-            Debug.Log("El objeto no tiene NetworkObject");
+        if (!collision.gameObject.TryGetComponent<PlayerController>( out var player)) //Comprobamos si el player es un jugador
             return;
-        }
 
-        if (!collision.gameObject.TryGetComponent<Rigidbody>(out var playerRb))
-        {
-            Debug.Log("El objeto no tiene Rigidbody");
-            return;
-        }
+        Vector3 direction = collision.transform.position - transform.position; //Calcular la direccion de empuje
 
-        Vector3 direction = playerRb.position - transform.position;
         direction.y = 0f;
 
         if (direction.sqrMagnitude < 0.001f)
@@ -35,11 +25,9 @@ public class Bumper : NetworkBehaviour
 
         direction.Normalize();
 
-        playerRb.AddForce(
-            direction * pushForce,
-            ForceMode.Impulse
-        );
+        Vector3 impulse = direction * pushForce + Vector3.up * upwardForce; //Lo impulsamos
 
-        Debug.Log("¡Bumper activado!");
+        player.ApplyKnockback(impulse); //aplica el impulso al Rigidbody
+
     }
 }
