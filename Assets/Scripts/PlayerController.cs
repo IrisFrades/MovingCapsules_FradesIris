@@ -33,11 +33,18 @@ public class PlayerController : NetworkBehaviour
 
     private Renderer playerRenderer;
 
-
-    [SerializeField] private GameObject projectilePrefab;
-    [SerializeField] private Transform projectileSpawnPoint;
+    [SerializeField] private GameObject projectilePrefab; //Prefab del proyetil
+    [SerializeField] private Transform projectileSpawnPoint; //Donde va a aparecer el proyectil
     private float knockbackTimer = 0f;
 
+    [Header("Grab System")]
+    [SerializeField] private Transform holdPoint; //Punto donde se colocaran las cajas que se cojan
+    [SerializeField] private float grabDistance = 2f; //distancia del circulo que tiene alrededor el personaje
+
+    private NetworkGrabbable nearbyGrabbable; //Para guardar la caja que pueda cojer 
+    private NetworkGrabbable grabbedObject; //Donde se actualiza que caja tiene
+
+    private NetworkGrabbable promptTarget;
 
     private void Awake()
     {
@@ -52,21 +59,19 @@ public class PlayerController : NetworkBehaviour
         playerColour.OnValueChanged += OnPlayerColorChanged; //Cuando el color del player cambie, se tiene que ejecutar OnPlayerColorChanged
         playerName.OnValueChanged += OnPlayerNameChanged; //Cuando el nombre del player cambie, se tiene que ejecutar OnPlayerNameChanged
 
-
         if (IsServer)
         {
             playerColour.Value = Random.ColorHSV(0f, 1f, 0.7f, 1f, 0.7f, 1f);
 
             playerName.Value = new FixedString32Bytes($"Jugador {OwnerClientId}");
 
-
             rb.isKinematic = false; //En el server, el rb es dinamico para simular las fisicas
         }
         else
         {
-            rb.isKinematic = true;//En el cliente, el rb es cinematico para que la fisica local
-                                  //del cliente no tenga problemas con las posiciones que reciba
-                                  //desde el server via NetworkTransforms (lo que tiene cada player como componente)
+            rb.isKinematic = true; //En el cliente, el rb es cinematico para que la fisica local
+                                   //del cliente no tenga problemas con las posiciones que reciba
+                                   //desde el server via NetworkTransforms (lo que tiene cada player como componente)
         }
 
     }
@@ -78,7 +83,7 @@ public class PlayerController : NetworkBehaviour
 
     private void ApplyColor(Color color)
     {
-        if(playerRenderer != null)
+        if (playerRenderer != null)
         {
             playerRenderer.material.color = color;
         }
@@ -90,9 +95,11 @@ public class PlayerController : NetworkBehaviour
 
     }
 
-    void Update()
+    private void Update()
     {
         if (!IsOwner) return; //Solo el cliente owner (IsOwner) puede leer sus propias entradas de teclado
+
+        UpdateNearbyPrompt();
 
         //Lectura del input local del cliente dueño
         float h = 0f;
@@ -106,31 +113,75 @@ public class PlayerController : NetworkBehaviour
             if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) v += 1f;
         }
 
-
         if (Keyboard.current != null &&
             Keyboard.current.fKey.wasPressedThisFrame)
         {
             ShootProjectileServerRpc();
         }
 
-
         Vector2 input = new Vector2(h, v).normalized;
 
         //Enviamos la entrada de control al servidor por un ServerRpc
         SubmitInputServerRpc(input);
 
-        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) //Si se ha presionado la tecla SPACE
         {
             JumpServerRpc();
         }
 
-        if (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame)
+        if (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame) //Si se ha presionado la tecla C
         {
             ChangeColorServerRpc();
         }
 
+        FindNearbyGrabbable();
 
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame) //Si se ha presionado la tecla E
+        {
+            GrabOrThrowServerRpc();
+        }
 
+    }
+
+    private void FixedUpdate()
+    {
+        if (!IsServer) return;
+
+        // Para que durante ese tiempo el movimiento normal del jugador no sobrescriba la velocidad que le ha dado el bumper
+        if (knockbackTimer > 0f)
+        {
+            knockbackTimer -= Time.fixedDeltaTime;
+        }
+        else
+        {
+            // Movimiento normal del jugador
+            Vector3 moveDirection = new Vector3(inputVector.x, 0f, inputVector.y);
+
+            if (moveDirection != Vector3.zero)
+            {
+                transform.LookAt(transform.position - moveDirection);
+            }
+
+            Vector3 targetVelocity = moveDirection * speed;
+
+            rb.linearVelocity = new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z);
+        }
+
+        // Salto normal
+        if (jumpRequested)
+        {
+            jumpRequested = false;
+
+            if (Physics.Raycast(raycast.position, Vector3.down, out RaycastHit hit, groundDistance))
+            {
+                if (hit.collider.CompareTag("Floor"))
+                {
+                    rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+                    PlayJumpSoundClientRpc();
+                }
+            }
+        }
     }
 
     public void ChangeColorFromProjectile()
@@ -145,14 +196,10 @@ public class PlayerController : NetworkBehaviour
         );
     }
 
-
-
     /// <summary>
     /// ServerRpc es un mensaje que va del cliente al servidor (mandar algo al servidor)
     /// ClientRpc es un mensaje que va del servidor al cliente(mandar algo a los clientes)
     /// </summary>
-
-
 
     [ServerRpc]
     private void SubmitInputServerRpc(Vector2 input)
@@ -173,7 +220,6 @@ public class PlayerController : NetworkBehaviour
         jumpAudio.Play();
     }
 
-
     [ServerRpc]
     private void ShootProjectileServerRpc()
     {
@@ -184,7 +230,6 @@ public class PlayerController : NetworkBehaviour
         Quaternion spawnRotation = projectileSpawnPoint.rotation;
 
         GameObject projectileObject = Instantiate(projectilePrefab, spawnPosition, spawnRotation); //Crea una instancia del prefab del proyectil
-
 
         //Aqui busca si el prefab tiene NetworkObject, DEBEN tener ese componente
 
@@ -200,13 +245,11 @@ public class PlayerController : NetworkBehaviour
 
         if (projectile != null)
         {
-            projectile.Initialize(OwnerClientId, projectileSpawnPoint.forward
-            );
+            projectile.Initialize(OwnerClientId, projectileSpawnPoint.forward);
         }
 
         networkObject.Spawn(); //Se registra el proyectil como objeto de red.
     }
-
 
     /// <summary>
     /// Netcode se encarga de enviar el nuevo valor a los demas clientes
@@ -222,43 +265,105 @@ public class PlayerController : NetworkBehaviour
         );
     }
 
-    private void FixedUpdate()
+    [ServerRpc]
+    private void GrabOrThrowServerRpc()
     {
-        if (!IsServer) return;
 
-        // Para que durante ese tiempo el movimiento normal del jugador no sobrescriba la velocidad que le ha dado el bumper
-        if (knockbackTimer > 0f)
+        if (grabbedObject != null) //si ya tiene una caja
         {
-            knockbackTimer -= Time.fixedDeltaTime;
+            grabbedObject.ThrowServer(holdPoint.forward); //la soltamos
+            grabbedObject = null; //ya no tenemos ninguna caja
+            return; 
         }
-        else
-        {
-            // Movimiento normal del jugador
-            Vector3 moveDirection = new Vector3( inputVector.x, 0f, inputVector.y );
 
-            if (moveDirection != Vector3.zero)
+        if (holdPoint == null) //si el personaje tiene algun punto donde pueda cojer una caja y colocarla (en su cuerpo como si tuviera manos)
+            return;
+
+        // El servidor busca objetos cercanos.
+        Collider[] hits = Physics.OverlapSphere(transform.position,grabDistance); //Mira si hay algun objeto con collider dentro de la esfera
+
+        foreach (Collider hit in hits) //se revisa la lista de objetos y que tengan el objeto NetworkGrabbable
+        {
+            NetworkGrabbable grabbable = hit.GetComponentInParent<NetworkGrabbable>();
+
+            if (grabbable == null)
+                continue;
+
+            if (grabbable.GrabServer(holdPoint))
             {
-                transform.LookAt(transform.position - moveDirection);
+                grabbedObject = grabbable;
+                return;
             }
+        }
+    }
 
-            Vector3 targetVelocity = moveDirection * speed;
+    //Metodo que busca si hay algún objeto que se pueda agarrar cerca del jugador y guarda el primero que encuentra en nearbyGrabbable
+    private void FindNearbyGrabbable()
+    {
+        nearbyGrabbable = null;
 
-            rb.linearVelocity = new Vector3( targetVelocity.x, rb.linearVelocity.y, targetVelocity.z );
+        if (holdPoint == null)
+            return;
+
+        Collider[] hits = Physics.OverlapSphere(transform.position, grabDistance);
+
+        foreach (Collider hit in hits)
+        {
+            NetworkGrabbable grabbable = hit.GetComponentInParent<NetworkGrabbable>();
+
+            if (grabbable != null)
+            {
+                nearbyGrabbable = grabbable;
+                return;
+            }
+        }
+    }
+
+    //Metodo que busca una caja cercana que no esté cojida para decidir si debe mostrar el canva
+    private void UpdateNearbyPrompt()
+    {
+        NetworkGrabbable newTarget = null;
+
+        if (holdPoint != null)
+        {
+            Collider[] hits = Physics.OverlapSphere(transform.position, grabDistance);
+
+            foreach (Collider hit in hits)
+            {
+                NetworkGrabbable grabbable = hit.GetComponentInParent<NetworkGrabbable>();
+
+                if (grabbable == null)
+                    continue;
+
+                if (grabbable.IsGrabbed)
+                    continue;
+
+                newTarget = grabbable;
+                break;
+            }
         }
 
-        // Salto normal
-        if (jumpRequested)
+        // Ocultar el aviso anterior cuando dejamos de mirar
+        // una caja válida o nos alejamos.
+        if (promptTarget != newTarget)
         {
-            jumpRequested = false;
+            if (promptTarget != null)
+                promptTarget.SetPromptVisible(false);
 
-            if (Physics.Raycast( raycast.position, Vector3.down, out RaycastHit hit, groundDistance))
+            promptTarget = newTarget;
+        }
+
+        // Solo mostrarlo si la caja sigue libre.
+        if (promptTarget != null)
+        {
+            if (promptTarget.IsGrabbed)
             {
-                if (hit.collider.CompareTag("Floor"))
-                {
-                    rb.AddForce( Vector3.up * jumpForce, ForceMode.Impulse);
-
-                    PlayJumpSoundClientRpc();
-                }
+                promptTarget.SetPromptVisible(false);
+                promptTarget = null;
+            }
+            else
+            {
+                promptTarget.SetPromptVisible(true);
             }
         }
     }
@@ -274,5 +379,7 @@ public class PlayerController : NetworkBehaviour
         rb.AddForce(impulse, ForceMode.Impulse);
     }
 
-}
 
+    
+
+}
