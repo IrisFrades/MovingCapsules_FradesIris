@@ -61,7 +61,7 @@ public class NetworkGrabbable : NetworkBehaviour
             return false;
         }
 
-        // Solo el servidor modifica la jerarquía de red.
+        
         // El objeto pasa a ser hijo del jugador.
         if (!NetworkObject.TrySetParent(playerNetworkObject.transform, false))
         {
