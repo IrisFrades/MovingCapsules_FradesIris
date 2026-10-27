@@ -33,6 +33,8 @@ public class PlayerController : NetworkBehaviour
 
     private Renderer playerRenderer;
 
+    
+
     [SerializeField] private GameObject projectilePrefab; //Prefab del proyetil
     [SerializeField] private Transform projectileSpawnPoint; //Donde va a aparecer el proyectil
     private float knockbackTimer = 0f;
